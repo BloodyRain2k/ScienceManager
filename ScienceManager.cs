@@ -202,6 +202,8 @@ public class ScienceManager : MonoBehaviour
 			return science;
 		}
 	}
+
+    string tooltipText = "";
 	
 	void drawGUI() {
 		var vessel = FlightGlobals.ActiveVessel;
@@ -227,6 +229,10 @@ public class ScienceManager : MonoBehaviour
 			windowPosSize.x = Mathf.Clamp(windowPosSize.x, -1, Screen.width - windowPosSize.width);
 			windowPosSize.y = Mathf.Clamp(windowPosSize.y, -1, Screen.height - windowPosSize.height);
 			windowPosSize = GUILayout.Window(10007, windowPosSize, windowGUI, windowTitle + " - " + ResearchAndDevelopment.Instance.Science, GUILayout.MinWidth(650));
+
+
+            DrawToolTip();
+                  
 		}
 	}
 	
@@ -280,11 +286,57 @@ public class ScienceManager : MonoBehaviour
 				}
 			}
 		}
-		
+
+
+        ScienceExperiment exp = ResearchAndDevelopment.GetExperiment(experiment.experiment.id);
+        string tooltip = "";
+  
+        CelestialBody body = experiment.vessel.mainBody;
+        foreach (ExperimentSituations sit in Enum.GetValues(typeof(ExperimentSituations)))
+        {
+            if (exp.IsAvailableWhile(sit, body) &&
+                 !((sit == ExperimentSituations.FlyingHigh || sit == ExperimentSituations.FlyingLow) && !body.atmosphere) &&
+                 !(sit == ExperimentSituations.SrfSplashed && !body.ocean)
+               )
+            {
+                string key;
+                if (exp.BiomeIsRelevantWhile(sit))                    
+                {
+                    if (body.BiomeMap != null && body.BiomeMap.Attributes != null)
+                        foreach (CBAttributeMap.MapAttribute biome in body.BiomeMap.Attributes)
+                        {
+                            ScienceSubject sub = ResearchAndDevelopment.GetExperimentSubject(exp, sit, body, biome.name);                            
+                            tooltip += body.name + " " + sit.ToString() + " " + biome.name + " " + sub.science.ToString("F1") + "/" + Mathf.RoundToInt(sub.scienceCap) + "\n";
+                            
+                        }
+                    if (body.name == "Kerbin")
+                    {
+                        string[] specials = { "KSC", "Runway", "Launchpad" };
+                        foreach (string special in specials)
+                        {
+                            ScienceSubject sub = ResearchAndDevelopment.GetExperimentSubject(exp, sit, body, special);
+                            tooltip += body.name + " " + sit.ToString() + " " + special + " " + sub.science.ToString("F1") + "/" + Mathf.RoundToInt(sub.scienceCap) + "\n";
+
+                        }
+                    }
+                }
+                else
+                {
+                    key = body.name + sit.ToString();
+                    ScienceSubject sub = ResearchAndDevelopment.GetExperimentSubject(exp, sit, body, "");
+                    if (sub != null)
+                        tooltip += body.name + " " + sit.ToString() + " " +  sub.science.ToString("F1") + "/" + Mathf.RoundToInt(sub.scienceCap) + "\n";
+                    else
+                        tooltip += body.name + " " + sit.ToString() + " 0/" + Mathf.RoundToInt(exp.scienceCap) + "\n";
+                }
+            }
+        }
+        
+        
 		GUILayout.BeginVertical();
 		
 		GUILayout.BeginHorizontal(GUILayout.MaxHeight(18));
-		GUILayout.Label(experiment.experimentID + (stats != "" ? " - " + stats : ""), styleTitle);
+        GUILayout.Label(new GUIContent(experiment.experimentID + (stats != "" ? " - " + stats : ""), tooltip), styleTitle);
 		if (hasData) {
 			GUILayout.Label(data.title, styleTitle);
 		}
@@ -359,9 +411,30 @@ public class ScienceManager : MonoBehaviour
 			}
 		}
 		GUILayout.EndHorizontal();
-		
+
+        if (Event.current.type != EventType.Layout)
+            tooltipText = GUI.tooltip;
+
 		GUI.DragWindow();
 	}
+
+
+    private void DrawToolTip()
+    {
+        if (tooltipText != "")
+        {
+            GUIStyle tooltipStyle = new GUIStyle(styleTitle);
+            tooltipStyle.border = new RectOffset(3, 3, 3, 3);
+            tooltipStyle.padding = new RectOffset(3, 3, 3, 3);
+
+            //tooltipStyle.normal.background = GUI.skin.box.normal.background;
+
+            Vector2 ttSize = styleTitle.CalcSize(new GUIContent(tooltipText));
+            GUI.Box(new Rect(Event.current.mousePosition.x, Event.current.mousePosition.y, ttSize.x + 10, ttSize.y + 10), tooltipText, tooltipStyle);
+            GUI.depth = 0;
+        }
+    }
+
 	
 	public void Update() {
 		if (!auto) {
